@@ -217,3 +217,258 @@ var demo = new Vue({
 })
 ```
 
+# Tree View
+
+```html
+<!-- item template -->
+<script type="text/x-template" id="item-template">
+  <li>
+    <div
+    // bind the class to the isFolder property 
+      :class="{bold: isFolder}" 
+      @click="toggle"
+      @dblclick="changeType">
+      {{ model.name }}
+      <span v-if="isFolder">[{{ open ? '-' : '+' }}]</span>
+    </div>
+    // v-show will always render the content but just hide/unhide them but v-if will render or not render the content depends on the value
+    <ul v-show="open" v-if="isFolder">
+    // recursion(this is where the magic is !!!)
+      <item
+        class="item"
+        v-for="(model, index) in model.children"
+        :key="index"
+        :model="model">
+      </item>
+      <li class="add" @click="addChild">+</li>
+    </ul>
+  </li>
+</script>
+
+<p>(You can double click on an item to turn it into a folder.)</p>
+
+<!-- the demo root element -->
+<ul id="demo">
+  <item
+    class="item"
+    :model="treeData">
+  </item>
+</ul>
+```
+
+```js
+// demo data
+var data = {
+  name: 'My Tree',
+  children: [
+    { name: 'hello' },
+    { name: 'wat' },
+    {
+      name: 'child folder',
+      children: [
+        {
+          name: 'child folder',
+          children: [
+            { name: 'hello' },
+            { name: 'wat' }
+          ]
+        },
+        { name: 'hello' },
+        { name: 'wat' },
+        {
+          name: 'child folder',
+          children: [
+            { name: 'hello' },
+            { name: 'wat' }
+          ]
+        }
+      ]
+    }
+  ]
+}
+
+// define the item component
+Vue.component('item', {
+  template: '#item-template',
+  props: {
+    model: Object
+  },
+  data: function () {
+    return {
+      open: false
+    }
+  },
+  computed: {
+    isFolder: function () {
+      return this.model.children &&
+        this.model.children.length
+    }
+  },
+  methods: {
+    toggle: function () {
+      if (this.isFolder) {
+        this.open = !this.open
+      }
+    },
+    changeType: function () {
+      if (!this.isFolder) {
+// PAY ATTENTION HERE !!! because the 'isFolder' property is a computation property and when this item initialized, there is no children thus the 'item.isFolder = undifined' which the compuatation property will not watch this value changes so here must explicitly declares that there is a property change by 'Vue.set' or'vm.$set' to let the computation watcher notice and take actions
+        Vue.set(this.model, 'children', [])
+        this.addChild()
+        this.open = true
+      }
+    },
+    addChild: function () {
+      this.model.children.push({
+        name: 'new stuff'
+      })
+    }
+  }
+})
+
+// boot up the demo
+var demo = new Vue({
+  el: '#demo',
+  data: {
+    treeData: data
+  }
+})
+```
+
+# Svg Graph
+
+```html
+<!-- template for the polygraph component. -->
+<script type="text/x-template" id="polygraph-template">
+  <g>
+    <polygon :points="points"></polygon>
+    <circle cx="100" cy="100" r="80"></circle>
+    <axis-label
+      v-for="(stat, index) in stats"
+      :stat="stat"
+      :index="index"
+      :total="stats.length">
+    </axis-label>
+  </g>
+</script>
+
+<!-- template for the axis label component. -->
+<script type="text/x-template" id="axis-label-template">
+  <text :x="point.x" :y="point.y">{{stat.label}}</text>
+</script>
+
+<!-- demo root element -->
+<div id="demo">
+  <!-- Use the component -->
+  <svg width="200" height="200">
+    <polygraph :stats="stats"></polygraph>
+  </svg>
+  <!-- controls -->
+  <div v-for="stat in stats">
+    <label>{{stat.label}}</label>
+    <input type="range" v-model="stat.value" min="0" max="100">
+    <span>{{stat.value}}</span>
+    <button @click="remove(stat)" class="remove">X</button>
+  </div>
+  <form id="add">
+    <input name="newlabel" v-model="newLabel">
+    <button @click="add">Add a Stat</button>
+  </form>
+  <pre id="raw">{{ stats }}</pre>
+</div>
+
+<p style="font-size:12px">* input[type="range"] requires IE10 or above.</p>
+```
+
+```js
+// The raw data to observe
+var stats = [
+  { label: 'A', value: 100 },
+  { label: 'B', value: 100 },
+  { label: 'C', value: 100 },
+  { label: 'D', value: 100 },
+  { label: 'E', value: 100 },
+  { label: 'F', value: 100 }
+]
+
+// A resusable polygon graph component
+Vue.component('polygraph', {
+  props: ['stats'],
+  template: '#polygraph-template',
+  computed: {
+    // a computed property for the polygon's points
+    points: function () {
+      var total = this.stats.length
+      return this.stats.map(function (stat, i) {
+        var point = valueToPoint(stat.value, i, total)
+        return point.x + ',' + point.y
+      }).join(' ')
+    }
+  },
+  components: {
+    // a sub component for the labels
+    'axis-label': {
+      props: {
+        stat: Object,
+        index: Number,
+        total: Number
+      },
+      template: '#axis-label-template',
+      computed: {
+        point: function () {
+          return valueToPoint(
+            +this.stat.value + 10,
+            this.index,
+            this.total
+          )
+        }
+      }
+    }
+  }
+})
+
+// math helper...
+function valueToPoint (value, index, total) {
+  var x     = 0
+  var y     = -value * 0.8
+  var angle = Math.PI * 2 / total * index
+  var cos   = Math.cos(angle)
+  var sin   = Math.sin(angle)
+  var tx    = x * cos - y * sin + 100
+  var ty    = x * sin + y * cos + 100
+  return {
+    x: tx,
+    y: ty
+  }
+}
+
+// bootstrap the demo
+new Vue({
+  el: '#demo',
+  data: {
+    newLabel: '',
+    stats: stats
+  },
+  methods: {
+    add: function (e) {
+      e.preventDefault()
+        //dont allow the same tag
+      if (!this.newLabel) return
+      this.stats.push({
+        label: this.newLabel,
+        value: 100
+      })
+      this.newLabel = ''
+    },
+    remove: function (stat) {
+        //details for user experience
+      if (this.stats.length > 3) {
+        this.stats.splice(this.stats.indexOf(stat), 1)
+      } else {
+        alert('Can\'t delete more!')
+      }
+    }
+  }
+})
+```
+
